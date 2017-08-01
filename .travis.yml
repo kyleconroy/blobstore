@@ -1,0 +1,11 @@
+go_import_path: stackmachine.com/blobstore
+language: go
+sudo: false
+
+matrix:
+  include:
+    - go: 1.8
+    - go: tip
+
+script:
+  - go test -cover -race ./...
