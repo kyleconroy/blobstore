@@ -8,8 +8,8 @@ import (
 
 func ExampleMap_Usage() {
 	store := NewMap()
-	_ = store.Put("foo", strings.NewReader("bar"), len("bar"))
-	rc, _, _ = store.Get("foo")
+	_ = store.Put("foo", strings.NewReader("bar"), int64(len("bar")))
+	rc, _, _ := store.Get("foo")
 	b, _ := ioutil.ReadAll(rc)
 	fmt.Println(string(b))
 	// "bar"
