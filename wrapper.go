@@ -3,6 +3,7 @@ package blobstore
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"io"
 	"io/ioutil"
 	"log"
@@ -34,8 +35,8 @@ type entry struct {
 	size int64
 }
 
-func (l *lru) Put(key string, blob io.Reader, length int64) error {
-	if err := l.Client.Put(key, blob, length); err != nil {
+func (l *lru) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
+	if err := l.Client.Put(ctx, key, blob, length); err != nil {
 		return err
 	}
 
@@ -48,27 +49,27 @@ func (l *lru) Put(key string, blob io.Reader, length int64) error {
 		l.lookup[key] = ele
 		for l.maxSize != 0 && l.currentSize > l.maxSize {
 			if ele := l.ll.Back(); ele != nil {
-				l.Delete(ele.Value.(entry).key)
+				l.Delete(ctx, ele.Value.(entry).key)
 			}
 		}
 	}
 	return nil
 }
 
-func (l *lru) Get(key string) (io.ReadCloser, int64, error) {
+func (l *lru) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	if ele, hit := l.lookup[key]; hit {
 		l.ll.MoveToFront(ele)
 	}
-	return l.Client.Get(key)
+	return l.Client.Get(ctx, key)
 }
 
-func (l *lru) Delete(key string) error {
+func (l *lru) Delete(ctx context.Context, key string) error {
 	if ele, hit := l.lookup[key]; hit {
 		l.ll.Remove(ele)
 		l.currentSize -= ele.Value.(entry).size
 		delete(l.lookup, key)
 	}
-	return l.Client.Delete(key)
+	return l.Client.Delete(ctx, key)
 }
 
 type synchronized struct {
@@ -80,32 +81,32 @@ func NewSynchronized(c Client) Client {
 	return &synchronized{Client: c}
 }
 
-func (s *synchronized) Put(key string, blob io.Reader, length int64) error {
+func (s *synchronized) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Client.Put(key, blob, length)
+	return s.Client.Put(ctx, key, blob, length)
 }
 
-func (s *synchronized) Get(key string) (io.ReadCloser, int64, error) {
+func (s *synchronized) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	// Note the use of `Lock` instead of `RLock`. This is intentional.
 	//
 	// The LRU wrapper mutates internal state on every get call. Using RLock
 	// led to panics due to concurrent map and list access.
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Client.Get(key)
+	return s.Client.Get(ctx, key)
 }
 
-func (s *synchronized) Delete(key string) error {
+func (s *synchronized) Delete(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Client.Delete(key)
+	return s.Client.Delete(ctx, key)
 }
 
-func (s *synchronized) Contains(key string) (bool, error) {
+func (s *synchronized) Contains(ctx context.Context, key string) (bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.Client.Contains(key)
+	return s.Client.Contains(ctx, key)
 }
 
 type prefixed struct {
@@ -117,20 +118,20 @@ func Prefixed(prefix string, i Client) Client {
 	return &prefixed{prefix, i}
 }
 
-func (p *prefixed) Put(key string, blob io.Reader, length int64) error {
-	return p.Client.Put(path.Join("/", p.prefix, key), blob, length)
+func (p *prefixed) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
+	return p.Client.Put(ctx, path.Join("/", p.prefix, key), blob, length)
 }
 
-func (p *prefixed) Get(key string) (io.ReadCloser, int64, error) {
-	return p.Client.Get(path.Join("/", p.prefix, key))
+func (p *prefixed) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	return p.Client.Get(ctx, path.Join("/", p.prefix, key))
 }
 
-func (p *prefixed) Delete(key string) error {
-	return p.Client.Delete(path.Join("/", p.prefix, key))
+func (p *prefixed) Delete(ctx context.Context, key string) error {
+	return p.Client.Delete(ctx, path.Join("/", p.prefix, key))
 }
 
-func (p *prefixed) Contains(key string) (bool, error) {
-	return p.Client.Contains(path.Join("/", p.prefix, key))
+func (p *prefixed) Contains(ctx context.Context, key string) (bool, error) {
+	return p.Client.Contains(ctx, path.Join("/", p.prefix, key))
 }
 
 type cached struct {
@@ -143,45 +144,45 @@ func Cached(authority Client, caches ...Client) Client {
 	return &cached{authority, caches, nil}
 }
 
-func (c *cached) Put(key string, blob io.Reader, length int64) error {
-	blob = c.putCache(key, ioutil.NopCloser(blob), length)
+func (c *cached) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
+	blob = c.putCache(ctx, key, ioutil.NopCloser(blob), length)
 
-	err := c.authority.Put(key, blob, length)
+	err := c.authority.Put(ctx, key, blob, length)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *cached) Get(key string) (io.ReadCloser, int64, error) {
+func (c *cached) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	for _, cache := range c.caches {
-		rd, length, err := cache.Get(key)
+		rd, length, err := cache.Get(ctx, key)
 		if err == nil {
 			return rd, length, nil
 		}
 	}
-	rd, length, err := c.authority.Get(key)
+	rd, length, err := c.authority.Get(ctx, key)
 	if err != nil {
 		return nil, 0, err
 	}
-	rd = c.putCache(key, rd, length)
+	rd = c.putCache(ctx, key, rd, length)
 	return rd, length, nil
 }
 
-func (c *cached) Delete(key string) error {
+func (c *cached) Delete(ctx context.Context, key string) error {
 	for _, cache := range c.caches {
 		// Deletion from a cache is best-effort, ignore failures
-		cache.Delete(key)
+		cache.Delete(ctx, key)
 	}
-	return c.authority.Delete(key)
+	return c.authority.Delete(ctx, key)
 }
 
-func (c *cached) Contains(key string) (bool, error) {
-	return c.authority.Contains(key)
+func (c *cached) Contains(ctx context.Context, key string) (bool, error) {
+	return c.authority.Contains(ctx, key)
 }
 
-func (c *cached) putCache(key string, r io.ReadCloser, length int64) io.ReadCloser {
-	return &teeCacher{r: r, c: c, key: key, length: length}
+func (c *cached) putCache(ctx context.Context, key string, r io.ReadCloser, length int64) io.ReadCloser {
+	return &teeCacher{r: r, c: c, key: key, length: length, ctx: ctx}
 }
 
 type teeCacher struct {
@@ -192,6 +193,7 @@ type teeCacher struct {
 	length int64
 	buf    bytes.Buffer
 	once   sync.Once
+	ctx    context.Context
 }
 
 func (t *teeCacher) Read(p []byte) (n int, err error) {
@@ -216,7 +218,7 @@ func (t *teeCacher) put() {
 		go func() {
 			defer t.signal()
 			for _, cache := range t.c.caches {
-				err := cache.Put(t.key, bytes.NewReader(t.buf.Bytes()), t.length)
+				err := cache.Put(t.ctx, t.key, bytes.NewReader(t.buf.Bytes()), t.length)
 				if err != nil {
 					log.Printf("Failed to write to cache key: %s err: %s", t.key, err)
 				}

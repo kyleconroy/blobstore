@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,7 +21,7 @@ func NewMap() *Map {
 	}
 }
 
-func (m *Map) Put(key string, blob io.Reader, length int64) error {
+func (m *Map) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
 	var buf bytes.Buffer
 	_, err := io.CopyN(&buf, blob, length)
 	if err != nil {
@@ -32,14 +33,14 @@ func (m *Map) Put(key string, blob io.Reader, length int64) error {
 	return nil
 }
 
-func (m *Map) Delete(key string) error {
+func (m *Map) Delete(ctx context.Context, key string) error {
 	m.Lock()
 	delete(m.Values, key)
 	m.Unlock()
 	return nil
 }
 
-func (m *Map) Get(key string) (io.ReadCloser, int64, error) {
+func (m *Map) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	m.Lock()
 	defer m.Unlock()
 	val, ok := m.Values[key]
@@ -49,7 +50,7 @@ func (m *Map) Get(key string) (io.ReadCloser, int64, error) {
 	return ioutil.NopCloser(bytes.NewReader(val)), int64(len(val)), nil
 }
 
-func (m *Map) Contains(key string) (bool, error) {
+func (m *Map) Contains(ctx context.Context, key string) (bool, error) {
 	m.Lock()
 	defer m.Unlock()
 	_, ok := m.Values[key]

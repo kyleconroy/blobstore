@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,14 +19,14 @@ func NewS3(svc *s3.S3, bucketName string) Client {
 	return &s3Store{svc, bucketName}
 }
 
-func (s *s3Store) Put(key string, blob io.Reader, length int64) error {
+func (s *s3Store) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
 	// aws SDK can't stream, buffer in memory
 	var buf bytes.Buffer
 	_, err := io.CopyN(&buf, blob, length)
 	if err != nil {
 		return err
 	}
-	_, err = s.svc.PutObject(&s3.PutObjectInput{
+	_, err = s.svc.PutObjectWithContext(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucketName),
 		Key:           aws.String(key),
 		Body:          bytes.NewReader(buf.Bytes()),
@@ -35,8 +36,8 @@ func (s *s3Store) Put(key string, blob io.Reader, length int64) error {
 	return err
 }
 
-func (s *s3Store) Get(key string) (io.ReadCloser, int64, error) {
-	resp, err := s.svc.GetObject(&s3.GetObjectInput{
+func (s *s3Store) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	resp, err := s.svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
 	})
@@ -46,16 +47,16 @@ func (s *s3Store) Get(key string) (io.ReadCloser, int64, error) {
 	return resp.Body, *resp.ContentLength, nil
 }
 
-func (s *s3Store) Delete(key string) error {
-	_, err := s.svc.DeleteObject(&s3.DeleteObjectInput{
+func (s *s3Store) Delete(ctx context.Context, key string) error {
+	_, err := s.svc.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
 	})
 	return err
 }
 
-func (s *s3Store) Contains(key string) (bool, error) {
-	_, err := s.svc.HeadObject(&s3.HeadObjectInput{
+func (s *s3Store) Contains(ctx context.Context, key string) (bool, error) {
+	_, err := s.svc.HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
 	})
