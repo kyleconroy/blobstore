@@ -7,7 +7,7 @@ This repository does not include a vendor directory, so you'll need to use
 `dep` to manage your dependencies.
 
 ```
-dep ensure stackmachine.com/blobstore
+dep ensure github.com/stackmachine/blobstore
 ```
 
 ## Usage
@@ -18,8 +18,7 @@ package main
 import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-
-	"stackmachine.com/blobstore"
+	"github.com/stackmachine/blobstore"
 )
 
 func main() {
