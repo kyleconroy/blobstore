@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestFS(t *testing.T) {
+	ctx := context.TODO()
 	var blob = []byte{0x1, 0x2, 0x3, 0x4}
 	blobLength := int64(len(blob))
 
@@ -18,11 +20,11 @@ func TestFS(t *testing.T) {
 	}
 	defer os.RemoveAll("TestFS")
 
-	if err := fs.Put("/foo", bytes.NewReader(blob), blobLength); err != nil {
+	if err := fs.Put(ctx, "/foo", bytes.NewReader(blob), blobLength); err != nil {
 		t.Fatalf("Failed to put blob: %v", err)
 	}
 
-	rd, length, err := fs.Get("/foo")
+	rd, length, err := fs.Get(ctx, "/foo")
 	if err != nil {
 		t.Fatalf("Failed to get blob: %v", err)
 	}
@@ -62,6 +64,7 @@ func (r *controlReader) Uncork() {
 }
 
 func TestNoPartial(t *testing.T) {
+	ctx := context.TODO()
 	var blob = []byte{0x1, 0x2, 0x3, 0x4}
 	blobLength := int64(len(blob))
 
@@ -74,7 +77,7 @@ func TestNoPartial(t *testing.T) {
 	control := controlReader{bytes.NewReader(blob), make(chan struct{})}
 	done := make(chan struct{})
 	go func() {
-		if err := fs.Put("/foo", &control, blobLength); err != nil {
+		if err := fs.Put(ctx, "/foo", &control, blobLength); err != nil {
 			t.Errorf("Failed to put blob: %v", err)
 		}
 		close(done)
@@ -84,7 +87,7 @@ func TestNoPartial(t *testing.T) {
 	control.Advance()
 	control.Advance()
 
-	rd, _, err := fs.Get("/foo")
+	rd, _, err := fs.Get(ctx, "/foo")
 	if err == nil {
 		rd.Close()
 		t.Fatalf("Got partial blob while Put operation was still in progress!")
@@ -94,7 +97,7 @@ func TestNoPartial(t *testing.T) {
 	control.Uncork()
 	<-done
 
-	rd, length, err := fs.Get("/foo")
+	rd, length, err := fs.Get(ctx, "/foo")
 	if err != nil {
 		t.Fatalf("Failed to get blob: %v", err)
 	}

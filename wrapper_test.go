@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"sync"
@@ -10,6 +11,7 @@ import (
 )
 
 func TestSync(t *testing.T) {
+	ctx := context.TODO()
 	m := NewMap()
 	c := NewSynchronized(m)
 	var wg sync.WaitGroup
@@ -19,17 +21,17 @@ func TestSync(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			key := fmt.Sprintf("/%s/%d", ns, i)
 			val := fmt.Sprintf("val%d", i)
-			if err := c.Put(key, bytes.NewReader([]byte(val)), int64(len(val))); err != nil {
+			if err := c.Put(ctx, key, bytes.NewReader([]byte(val)), int64(len(val))); err != nil {
 				t.Fatal(err)
 			}
-			exists, err := c.Contains(key)
+			exists, err := c.Contains(ctx, key)
 			switch {
 			case err != nil:
 				t.Fatal(err)
 			case !exists:
 				t.Fatal("key should exist")
 			}
-			rd, _, err := c.Get(key)
+			rd, _, err := c.Get(ctx, key)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -41,7 +43,7 @@ func TestSync(t *testing.T) {
 				t.Fatal("got wrong value")
 			}
 			rd.Close()
-			if err := c.Delete(key); err != nil {
+			if err := c.Delete(ctx, key); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -55,14 +57,15 @@ func TestSync(t *testing.T) {
 }
 
 func TestLRU(t *testing.T) {
+	ctx := context.TODO()
 	auth := NewMap()
 	lru := LRU(3, auth)
 	b := []byte{0x1, 0x2}
 
-	err := lru.Put("/foo", bytes.NewReader(b), 2)
+	err := lru.Put(ctx, "/foo", bytes.NewReader(b), 2)
 	Equal(t, err, nil)
 
-	err = lru.Put("/bar", bytes.NewReader(b), 2)
+	err = lru.Put(ctx, "/bar", bytes.NewReader(b), 2)
 	Equal(t, err, nil)
 
 	Equal(t, len(auth.Values["/foo"]), 0)
@@ -70,12 +73,13 @@ func TestLRU(t *testing.T) {
 }
 
 func TestPutCache(t *testing.T) {
+	ctx := context.TODO()
 	auth := NewMap()
 	cache := NewMap()
 	b := []byte{0x1, 0x2}
 
 	store, signal := newCached(auth, cache)
-	err := store.Put("/foo", bytes.NewReader(b), 2)
+	err := store.Put(ctx, "/foo", bytes.NewReader(b), 2)
 	Equal(t, err, nil)
 
 	wait(signal)
@@ -83,6 +87,7 @@ func TestPutCache(t *testing.T) {
 }
 
 func TestGetCache(t *testing.T) {
+	ctx := context.TODO()
 	t.Parallel()
 	auth := NewMap()
 	cache := NewMap()
@@ -90,7 +95,7 @@ func TestGetCache(t *testing.T) {
 	auth.Values["/foo"] = b
 
 	store, signal := newCached(auth, cache)
-	rd, length, err := store.Get("/foo")
+	rd, length, err := store.Get(ctx, "/foo")
 	Equal(t, err, nil)
 	Equal(t, length, int64(2))
 
@@ -102,13 +107,14 @@ func TestGetCache(t *testing.T) {
 }
 
 func TestPrematurePutClose(t *testing.T) {
+	ctx := context.TODO()
 	t.Parallel()
 	auth := NewMap()
 	cache := NewMap()
 	b := []byte{0x1, 0x2}
 
 	store, signal := newCached(auth, cache)
-	err := store.Put("/foo", bytes.NewReader(b), 3)
+	err := store.Put(ctx, "/foo", bytes.NewReader(b), 3)
 	NotEqual(t, err, nil)
 
 	wait(signal)
@@ -117,6 +123,7 @@ func TestPrematurePutClose(t *testing.T) {
 }
 
 func TestPrematureGetClose(t *testing.T) {
+	ctx := context.TODO()
 	t.Parallel()
 	auth := NewMap()
 	cache := NewMap()
@@ -124,7 +131,7 @@ func TestPrematureGetClose(t *testing.T) {
 	auth.Values["/foo"] = b
 
 	store, signal := newCached(auth, cache)
-	rd, length, err := store.Get("/foo")
+	rd, length, err := store.Get(ctx, "/foo")
 	Equal(t, err, nil)
 	Equal(t, length, int64(2))
 

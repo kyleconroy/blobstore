@@ -1,6 +1,7 @@
 package blobstore
 
 import (
+	"context"
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
@@ -37,7 +38,7 @@ type fsHeader struct {
 
 var fsHeaderEndianness = binary.BigEndian
 
-func (s *fsStore) Put(key string, blob io.Reader, length int64) error {
+func (s *fsStore) Put(ctx context.Context, key string, blob io.Reader, length int64) error {
 	finalPath := s.makePath(key)
 	tempPath := finalPath + "-temp"
 	f, err := os.Create(tempPath)
@@ -75,7 +76,7 @@ func (s *fsStore) Put(key string, blob io.Reader, length int64) error {
 	return os.Rename(tempPath, finalPath)
 }
 
-func (s *fsStore) Get(key string) (io.ReadCloser, int64, error) {
+func (s *fsStore) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	f, err := os.Open(s.makePath(key))
 	if err != nil {
 		return nil, 0, err
@@ -98,11 +99,11 @@ func (s *fsStore) Get(key string) (io.ReadCloser, int64, error) {
 	return f, hdr.Length, nil
 }
 
-func (s *fsStore) Delete(key string) error {
+func (s *fsStore) Delete(ctx context.Context, key string) error {
 	return os.Remove(s.makePath(key))
 }
 
-func (s *fsStore) Contains(key string) (bool, error) {
+func (s *fsStore) Contains(ctx context.Context, key string) (bool, error) {
 	_, err := os.Lstat(s.makePath(key))
 	switch {
 	case err == nil:

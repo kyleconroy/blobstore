@@ -16,12 +16,18 @@ dep ensure github.com/stackmachine/blobstore
 package main
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stackmachine/blobstore"
 )
 
 func main() {
+	// Create a ctx
+	ctx := context.Background()
+
 	// Create a store backed by an S3 bucket
 	sess := session.Must(session.NewSession())
 	bucket := blobstore.NewS3(s3.New(session), "example-bucket-name")
@@ -40,5 +46,8 @@ func main() {
 
 	// Start all keys with a shared prefix
 	final := blobstore.Prefixed("prefix", store)
+
+	// Check if a key exists; outputs "false"
+	fmt.Println(final.Contains(ctx, "key"))
 }
 ```
